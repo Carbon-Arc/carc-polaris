@@ -13,13 +13,13 @@ RUN chmod +x gradlew
 # Build with Hive support using fast-jar (default Quarkus package type)
 # hadoop-aws is included as a dependency for S3A filesystem support
 # Hive is enabled by default via gradle.properties (NonRESTCatalogs=HIVE)
-# Disable parallel builds and limit workers to reduce memory pressure for GitHub Actions (7GB RAM)
+# Using EC2 m5.8xlarge (128GB RAM) - configure memory for both Gradle and Quarkus workers
+# Set GRADLE_OPTS to ensure worker processes get enough memory
+ENV GRADLE_OPTS="-Xms16g -Xmx64g -XX:MaxMetaspaceSize=4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
 RUN ./gradlew :polaris-server:assemble :polaris-server:quarkusAppPartsBuild --rerun \
     -Dquarkus.container-image.build=false \
+    -Dquarkus.native.native-image-xmx=64g \
     --no-daemon
-    # --no-parallel \
-    # -Dorg.gradle.workers.max=1 \
-    # -Porg.gradle.workers.max=1
 
 # Runtime image
 FROM registry.access.redhat.com/ubi9/openjdk-21-runtime:1.23-6.1758133907
