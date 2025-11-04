@@ -14,9 +14,7 @@ RUN chmod +x gradlew
 # hadoop-aws is included as a dependency for S3A filesystem support
 # Hive is enabled by default via gradle.properties (NonRESTCatalogs=HIVE)
 # Memory settings are configured in gradle.properties (64GB max heap for EC2 m5.8xlarge)
-# JAVA_TOOL_OPTIONS ensures ALL Java processes (including Quarkus build workers) inherit memory settings
-# This is critical because Quarkus build workers run in separate JVM processes for Jandex indexing
-ENV JAVA_TOOL_OPTIONS="-Xms16g -Xmx64g -XX:MaxMetaspaceSize=4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:InitiatingHeapOccupancyPercent=45"
+# org.gradle.jvmargs in gradle.properties applies to Gradle daemon and all worker processes
 RUN ./gradlew :polaris-server:assemble :polaris-server:quarkusAppPartsBuild --rerun \
     -Dquarkus.container-image.build=false \
     --no-daemon
