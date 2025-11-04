@@ -13,12 +13,12 @@ RUN chmod +x gradlew
 # Build with Hive support using fast-jar (default Quarkus package type)
 # hadoop-aws is included as a dependency for S3A filesystem support
 # Hive is enabled by default via gradle.properties (NonRESTCatalogs=HIVE)
-# Using EC2 m5.8xlarge (128GB RAM) - configure memory for both Gradle and Quarkus workers
-# Set GRADLE_OPTS to ensure worker processes get enough memory
-ENV GRADLE_OPTS="-Xms16g -Xmx64g -XX:MaxMetaspaceSize=4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200"
+# Memory settings are configured in gradle.properties (64GB max heap for EC2 m5.8xlarge)
+# JAVA_TOOL_OPTIONS ensures ALL Java processes (including Quarkus build workers) inherit memory settings
+# This is critical because Quarkus build workers run in separate JVM processes for Jandex indexing
+ENV JAVA_TOOL_OPTIONS="-Xms16g -Xmx64g -XX:MaxMetaspaceSize=4g -XX:+UseG1GC -XX:MaxGCPauseMillis=200 -XX:InitiatingHeapOccupancyPercent=45"
 RUN ./gradlew :polaris-server:assemble :polaris-server:quarkusAppPartsBuild --rerun \
     -Dquarkus.container-image.build=false \
-    -Dquarkus.native.native-image-xmx=64g \
     --no-daemon
 
 # Runtime image

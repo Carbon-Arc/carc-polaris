@@ -91,21 +91,6 @@ tasks.named<QuarkusRun>("quarkusRun") {
 
 val quarkusBuild = tasks.named<QuarkusBuild>("quarkusBuild")
 
-// Configure Quarkus build to use high memory for Jandex indexing workers
-// This is critical for memory-intensive builds with Hive federation
-quarkusBuild.configure {
-  // Set JVM args for Quarkus build workers (used for Jandex indexing)
-  // These workers run in separate processes and need their own memory settings
-  jvmArgs = listOf(
-    "-Xms16g",
-    "-Xmx64g",
-    "-XX:MaxMetaspaceSize=4g",
-    "-XX:+UseG1GC",
-    "-XX:MaxGCPauseMillis=200",
-    "-XX:InitiatingHeapOccupancyPercent=45"
-  )
-}
-
 // Expose runnable jar via quarkusRunner configuration for integration-tests that require the
 // server.
 artifacts {
