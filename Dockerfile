@@ -31,18 +31,6 @@ RUN ./gradlew :polaris-server:assemble :polaris-server:quarkusBuild --rerun \
     -Pquarkus.package.runner-suffix=-run \
     --no-daemon
 
-# Debug: Show complete build output structure
-RUN echo "=== Full build directory structure ===" && \
-    find /build/runtime/server/build -type f | sort && \
-    echo "=== JAR file sizes ===" && \
-    find /build/runtime/server/build -name "*.jar" -exec ls -lh {} \;
-
-# Debug: Find where the JAR actually is (IN THE BUILDER STAGE)
-RUN echo "=== Looking for JARs ===" && \
-    find /build -name "*.jar" -type f | grep -i polaris-server || \
-    find /build -name "quarkus-run.jar" -type f || \
-    find /build -name "*.jar" -type f | head -20
-
 # Runtime image
 FROM registry.access.redhat.com/ubi9/openjdk-21-runtime:1.23-6.1758133907
 
@@ -77,10 +65,9 @@ ENV HADOOP_USER_NAME=hive
 ENV HADOOP_CONF_DIR=/tmp/hadoop-conf
 
 # Copy the legacy-jar from the build output
-# For legacy-jar, the output is typically at quarkus-app/quarkus-run.jar
-COPY --from=builder --chown=100:0 /build/runtime/server/build/quarkus-app/quarkus-run.jar /deployments/quarkus-run.jar
+COPY --from=builder --chown=100:0 /build/runtime/server/build/quarkus-run.jar /deployments/quarkus-run.jar
 # Copy lib directory (for dependencies in legacy-jar)
-COPY --from=builder --chown=100:0 /build/runtime/server/build/quarkus-app/lib/ /deployments/lib/
+COPY --from=builder --chown=100:0 /build/runtime/server/build/lib/ /deployments/lib/
 # Copy hadoop-aws dependencies
 COPY --from=builder --chown=100:0 /tmp/hadoop-deps/*.jar /deployments/lib/
 
