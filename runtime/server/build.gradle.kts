@@ -90,8 +90,10 @@ val quarkusBuild = tasks.named<QuarkusBuild>("quarkusBuild")
 
 // Expose runnable jar via quarkusRunner configuration for integration-tests that require the
 // server.
+// Note: For legacy-jar, the output is still in quarkus-app/quarkus-run.jar
+// The QuarkusBuild task doesn't expose a legacyJar property, so we reference the directory directly
 artifacts {
-  add(quarkusRunner.name, provider { quarkusBuild.get().legacyJar.resolve("quarkus-run.jar") }) {
+  add(quarkusRunner.name, layout.buildDirectory.file("quarkus-app/quarkus-run.jar")) {
     builtBy(quarkusBuild)
   }
   add("distributionElements", layout.buildDirectory.dir("quarkus-app")) { builtBy("quarkusBuild") }

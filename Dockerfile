@@ -4,13 +4,11 @@ FROM gradle:8.5-jdk21 AS builder
 # Copy the source code (we're building from the current repo, not cloning)
 WORKDIR /build
 
-# Copy Gradle files first for better caching
-COPY gradle/ gradle/
-COPY gradlew gradlew.bat gradle.properties build.gradle.kts settings.gradle.kts version.txt ./
-COPY build-logic/ build-logic/
-
-# Copy source code
+# Copy all source code
 COPY . .
+
+# Ensure gradlew is executable
+RUN chmod +x gradlew
 
 # Download hadoop-aws and dependencies
 RUN mkdir -p /tmp/hadoop-deps && \
