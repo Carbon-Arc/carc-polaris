@@ -1,0 +1,64 @@
+name: Build and Push Polaris Image
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+env:
+  AWS_REGION: us-east-1
+  ECR_REPOSITORY: polaris-dev
+  BASE_VERSION: 1.2.0
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+    permissions:
+      id-token: write
+      contents: read
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set version
+        id: version
+        run: |
+          VERSION="${{ env.BASE_VERSION }}-${{ github.run_number }}"
+          echo "version=${VERSION}" >> $GITHUB_OUTPUT
+          echo "Built version: ${VERSION}"
+
+      - name: Build, tag, and push image to Amazon ECR
+        id: build-publish
+        env:
+          ECR_REGISTRY: ${{ steps.login-ecr.outputs.registry }}
+          ECR_REPOSITORY: ${{ env.ECR_REPOSITORY }}
+          IMAGE_TAG: carc-polaris-${{ steps.version.outputs.version }}
+          IMAGE_TAG_LATEST: carc-polaris-${{ env.BASE_VERSION }}-latest
+        run: |
+          set -euo pipefail
+          # Build the image
+          docker build \
+            -t "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}" \
+            -t "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG_LATEST}" \
+            .
+          # Push both tags
+          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG}"
+          docker push "${ECR_REGISTRY}/${ECR_REPOSITORY}:${IMAGE_TAG_LATEST}"
+          echo "✅ Image ${IMAGE_TAG} pushed to ${ECR_REGISTRY}/${ECR_REPOSITORY}"
+          echo "✅ Image ${IMAGE_TAG_LATEST} pushed to ${ECR_REGISTRY}/${ECR_REPOSITORY}"
+
+      - name: Success
+        run: |
+          echo "✅ Successfully pushed carc-polaris-${{ steps.version.outputs.version }}"
