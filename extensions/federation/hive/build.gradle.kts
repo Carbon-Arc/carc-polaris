@@ -55,6 +55,9 @@ dependencies {
     exclude("com.sun.jersey", "jersey-servlet")
     exclude("io.dropwizard.metrics", "metrics-core")
   }
+  
+  // Add hadoop-aws for S3A filesystem support (needed for Hive to access S3)
+  implementation(libs.hadoop.aws)
 
   // CDI dependencies for runtime discovery
   implementation(libs.jakarta.enterprise.cdi.api)
