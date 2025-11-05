@@ -50,9 +50,6 @@ dependencies {
     runtimeOnly(project(":polaris-extensions-federation-hive"))
   }
 
-  // Add hadoop-aws for S3A filesystem support
-  runtimeOnly(libs.hadoop.aws)
-
   // enforce the Quarkus _platform_ here, to get a consistent and validated set of dependencies
   implementation(enforcedPlatform(libs.quarkus.bom))
   implementation("io.quarkus:quarkus-container-image-docker")

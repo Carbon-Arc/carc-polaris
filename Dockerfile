@@ -1,4 +1,4 @@
-# Build Polaris with Hive support and add hadoop-aws at runtime
+# Build Polaris with Hive support
 FROM gradle:8.5-jdk21 AS builder
 
 # Copy the source code (we're building from the current repo, not cloning)
@@ -11,7 +11,6 @@ COPY . .
 RUN chmod +x gradlew
 
 # Build with Hive support using fast-jar (default Quarkus package type)
-# hadoop-aws is included as a dependency for S3A filesystem support
 # Hive is enabled by default via gradle.properties (NonRESTCatalogs=HIVE)
 # Memory settings are configured in gradle.properties (64GB max heap for EC2 m5.8xlarge)
 # org.gradle.jvmargs in gradle.properties applies to Gradle daemon and all worker processes
@@ -23,7 +22,7 @@ RUN ./gradlew :polaris-server:assemble :polaris-server:quarkusAppPartsBuild --re
 FROM registry.access.redhat.com/ubi9/openjdk-21-runtime:1.23-6.1758133907
 
 LABEL org.opencontainers.image.source=https://github.com/apache/polaris
-LABEL org.opencontainers.image.description="Apache Polaris with Hive and hadoop-aws"
+LABEL org.opencontainers.image.description="Apache Polaris with Hive"
 LABEL org.opencontainers.image.licenses=Apache-2.0
 
 ENV LANGUAGE='en_US:en'
