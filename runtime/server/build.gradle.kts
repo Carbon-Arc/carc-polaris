@@ -37,6 +37,15 @@ val distributionElements by
     isCanBeResolved = false
   }
 
+// Custom configuration for hadoop-aws dependencies that won't be indexed by Quarkus
+// These will be copied directly to the lib directory after Quarkus build
+val hadoopAwsLibs by
+  configurations.creating {
+    isCanBeConsumed = false
+    isCanBeResolved = true
+    description = "Hadoop AWS dependencies to be added post-build to avoid Quarkus indexing OOM"
+  }
+
 dependencies {
   implementation(project(":polaris-runtime-service"))
 
@@ -48,6 +57,10 @@ dependencies {
 
   if ((project.findProperty("NonRESTCatalogs") as String?)?.contains("HIVE") == true) {
     runtimeOnly(project(":polaris-extensions-federation-hive"))
+    // Add hadoop-aws and its AWS SDK dependency to custom configuration
+    // These are added post-build to avoid Quarkus indexing which causes OOM
+    hadoopAwsLibs("org.apache.hadoop:hadoop-aws:3.4.2")
+    hadoopAwsLibs("com.amazonaws:aws-java-sdk-bundle:1.12.698")
   }
 
   // enforce the Quarkus _platform_ here, to get a consistent and validated set of dependencies
@@ -88,11 +101,35 @@ tasks.named<QuarkusRun>("quarkusRun") {
 
 val quarkusBuild = tasks.named<QuarkusBuild>("quarkusBuild")
 
+// Task to copy hadoop-aws JARs to Quarkus lib directory after build
+// This avoids Quarkus indexing which causes OOM errors
+val copyHadoopAwsLibs = tasks.register<Copy>("copyHadoopAwsLibs") {
+  dependsOn(quarkusBuild)
+  from(hadoopAwsLibs)
+  into(layout.buildDirectory.dir("quarkus-app/lib/main"))
+  
+  doFirst {
+    logger.lifecycle("Copying hadoop-aws libraries to Quarkus lib directory (post-build to avoid indexing)")
+  }
+}
+
+// Make quarkusAppPartsBuild depend on copying the hadoop-aws libs
+tasks.named("quarkusAppPartsBuild") {
+  finalizedBy(copyHadoopAwsLibs)
+}
+
+// Make assemble also depend on it
+tasks.named("assemble") {
+  dependsOn(copyHadoopAwsLibs)
+}
+
 // Expose runnable jar via quarkusRunner configuration for integration-tests that require the
 // server.
 artifacts {
   add(quarkusRunner.name, provider { quarkusBuild.get().fastJar.resolve("quarkus-run.jar") }) {
     builtBy(quarkusBuild)
   }
-  add("distributionElements", layout.buildDirectory.dir("quarkus-app")) { builtBy("quarkusBuild") }
+  add("distributionElements", layout.buildDirectory.dir("quarkus-app")) { 
+    builtBy("quarkusBuild", copyHadoopAwsLibs)
+  }
 }

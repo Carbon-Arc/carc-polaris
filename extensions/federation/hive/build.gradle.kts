@@ -55,7 +55,6 @@ dependencies {
     exclude("com.sun.jersey", "jersey-servlet")
     exclude("io.dropwizard.metrics", "metrics-core")
   }
-  runtimeOnly("org.apache.hadoop:hadoop-aws:3.4.2")
 
   // CDI dependencies for runtime discovery
   implementation(libs.jakarta.enterprise.cdi.api)
