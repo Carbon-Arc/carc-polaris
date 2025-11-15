@@ -70,6 +70,38 @@ public abstract class PolarisStorageIntegration<T extends PolarisStorageConfigur
       Optional<String> refreshCredentialsEndpoint);
 
   /**
+   * Subscope the creds against the allowed read and write locations with principal information.
+   *
+   * @param realmConfig the call context
+   * @param allowListOperation whether to allow LIST on all the provided allowed read/write
+   *     locations
+   * @param allowedReadLocations a set of allowed to read locations
+   * @param allowedWriteLocations a set of allowed to write locations
+   * @param refreshCredentialsEndpoint an optional endpoint to use for refreshing credentials. If
+   *     supported by the storage type it will be returned to the client in the appropriate
+   *     properties. The endpoint may be relative to the base URI and the client is responsible for
+   *     handling the relative path
+   * @param principalName the name of the authenticated principal requesting credentials, used for
+   *     metering and audit purposes. May be null for anonymous or system requests.
+   * @return An enum map including the scoped credentials
+   */
+  public AccessConfig getSubscopedCreds(
+      @Nonnull RealmConfig realmConfig,
+      boolean allowListOperation,
+      @Nonnull Set<String> allowedReadLocations,
+      @Nonnull Set<String> allowedWriteLocations,
+      Optional<String> refreshCredentialsEndpoint,
+      Optional<String> principalName) {
+    // Default implementation delegates to the original method for backward compatibility
+    return getSubscopedCreds(
+        realmConfig,
+        allowListOperation,
+        allowedReadLocations,
+        allowedWriteLocations,
+        refreshCredentialsEndpoint);
+  }
+
+  /**
    * Validate access for the provided operation actions and locations.
    *
    * @param actions a set of operation actions to validate, like LIST/READ/DELETE/WRITE/ALL

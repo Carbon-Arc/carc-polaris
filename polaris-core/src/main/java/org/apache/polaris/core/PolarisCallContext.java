@@ -19,6 +19,7 @@
 package org.apache.polaris.core;
 
 import jakarta.annotation.Nonnull;
+import java.util.function.Supplier;
 import org.apache.polaris.core.config.PolarisConfigurationStore;
 import org.apache.polaris.core.config.RealmConfig;
 import org.apache.polaris.core.config.RealmConfigImpl;
@@ -37,20 +38,38 @@ public class PolarisCallContext implements CallContext {
   private final PolarisConfigurationStore configurationStore;
   private final RealmContext realmContext;
   private final RealmConfig realmConfig;
+  private final Supplier<String> principalNameSupplier;
 
   public PolarisCallContext(
       @Nonnull RealmContext realmContext,
       @Nonnull BasePersistence metaStore,
       @Nonnull PolarisConfigurationStore configurationStore) {
+    this(realmContext, metaStore, configurationStore, () -> null);
+  }
+
+  public PolarisCallContext(
+      @Nonnull RealmContext realmContext,
+      @Nonnull BasePersistence metaStore,
+      @Nonnull PolarisConfigurationStore configurationStore,
+      String principalName) {
+    this(realmContext, metaStore, configurationStore, () -> principalName);
+  }
+
+  public PolarisCallContext(
+      @Nonnull RealmContext realmContext,
+      @Nonnull BasePersistence metaStore,
+      @Nonnull PolarisConfigurationStore configurationStore,
+      Supplier<String> principalNameSupplier) {
     this.realmContext = realmContext;
     this.metaStore = metaStore;
     this.configurationStore = configurationStore;
     this.realmConfig = new RealmConfigImpl(this.configurationStore, this.realmContext);
+    this.principalNameSupplier = principalNameSupplier != null ? principalNameSupplier : () -> null;
   }
 
   public PolarisCallContext(
       @Nonnull RealmContext realmContext, @Nonnull BasePersistence metaStore) {
-    this(realmContext, metaStore, new PolarisConfigurationStore() {});
+    this(realmContext, metaStore, new PolarisConfigurationStore() {}, () -> null);
   }
 
   public BasePersistence getMetaStore() {
@@ -72,6 +91,16 @@ public class PolarisCallContext implements CallContext {
     return this;
   }
 
+  /**
+   * Get the principal name associated with this call context.
+   * This is evaluated lazily to ensure authentication has completed.
+   * 
+   * @return the principal name, or null if not set
+   */
+  public String getPrincipalName() {
+    return principalNameSupplier.get();
+  }
+
   @Override
   public PolarisCallContext copy() {
     // The realm context is a request scoped bean injected by CDI,
@@ -81,6 +110,8 @@ public class PolarisCallContext implements CallContext {
     // copy of the RealmContext to ensure the access during the task executor.
     String realmId = this.realmContext.getRealmIdentifier();
     RealmContext realmContext = () -> realmId;
-    return new PolarisCallContext(realmContext, this.metaStore, this.configurationStore);
+    // Capture the principal name at copy time
+    String capturedPrincipalName = this.principalNameSupplier.get();
+    return new PolarisCallContext(realmContext, this.metaStore, this.configurationStore, capturedPrincipalName);
   }
 }

@@ -26,6 +26,7 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.UUID;
 import java.util.stream.Stream;
 import org.apache.polaris.core.config.RealmConfig;
 import org.apache.polaris.core.storage.AccessConfig;
@@ -33,6 +34,8 @@ import org.apache.polaris.core.storage.InMemoryStorageIntegration;
 import org.apache.polaris.core.storage.StorageAccessProperty;
 import org.apache.polaris.core.storage.StorageUtil;
 import org.apache.polaris.core.storage.aws.StsClientProvider.StsDestination;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import software.amazon.awssdk.auth.credentials.AwsCredentialsProvider;
 import software.amazon.awssdk.policybuilder.iam.IamConditionOperator;
 import software.amazon.awssdk.policybuilder.iam.IamEffect;
@@ -46,6 +49,8 @@ import software.amazon.awssdk.services.sts.model.AssumeRoleResponse;
 /** Credential vendor that supports generating */
 public class AwsCredentialsStorageIntegration
     extends InMemoryStorageIntegration<AwsStorageConfigurationInfo> {
+  private static final Logger LOGGER = LoggerFactory.getLogger(AwsCredentialsStorageIntegration.class);
+  
   private final StsClientProvider stsClientProvider;
   private final Optional<AwsCredentialsProvider> credentialsProvider;
 
@@ -76,6 +81,24 @@ public class AwsCredentialsStorageIntegration
       @Nonnull Set<String> allowedReadLocations,
       @Nonnull Set<String> allowedWriteLocations,
       Optional<String> refreshCredentialsEndpoint) {
+    return getSubscopedCreds(
+        realmConfig,
+        allowListOperation,
+        allowedReadLocations,
+        allowedWriteLocations,
+        refreshCredentialsEndpoint,
+        Optional.empty());
+  }
+
+  /** {@inheritDoc} */
+  @Override
+  public AccessConfig getSubscopedCreds(
+      @Nonnull RealmConfig realmConfig,
+      boolean allowListOperation,
+      @Nonnull Set<String> allowedReadLocations,
+      @Nonnull Set<String> allowedWriteLocations,
+      Optional<String> refreshCredentialsEndpoint,
+      Optional<String> principalName) {
     int storageCredentialDurationSeconds =
         realmConfig.getConfig(STORAGE_CREDENTIAL_DURATION_SECONDS);
     AwsStorageConfigurationInfo storageConfig = config();
@@ -83,11 +106,24 @@ public class AwsCredentialsStorageIntegration
     AccessConfig.Builder accessConfig = AccessConfig.builder();
 
     if (shouldUseSts(storageConfig)) {
+      // CRITICAL: Validate principal name is present for billing/metering
+      // Every AWS credential vended must be attributable to a principal for accurate billing
+      if (principalName == null || !principalName.isPresent() || principalName.get().isEmpty()) {
+        throw new IllegalStateException(
+            "Principal name is required for AWS credential vending to ensure accurate billing. "
+                + "All requests must be authenticated with a valid principal. "
+                + "Anonymous or system requests cannot access AWS resources.");
+      }
+
+      // Generate session name with principal for metering
+      String sessionName = generateSessionName(principalName);
+      LOGGER.info("Vending AWS credentials with session name: {}", sessionName);
+
       AssumeRoleRequest.Builder request =
           AssumeRoleRequest.builder()
               .externalId(storageConfig.getExternalId())
               .roleArn(storageConfig.getRoleARN())
-              .roleSessionName("PolarisAwsCredentialsStorageIntegration")
+              .roleSessionName(sessionName)
               .policy(
                   policyString(
                           storageConfig.getAwsPartition(),
@@ -154,6 +190,49 @@ public class AwsCredentialsStorageIntegration
 
   private boolean shouldUseSts(AwsStorageConfigurationInfo storageConfig) {
     return !Boolean.TRUE.equals(storageConfig.getStsUnavailable());
+  }
+
+  /**
+   * Generate an AWS session name for STS AssumeRole requests.
+   * Format: {principalName}_{timestamp}_{random} when principal is provided,
+   * otherwise uses default "PolarisAwsCredentialsStorageIntegration".
+   * 
+   * AWS session name requirements: 2-64 characters, alphanumeric and +=,.@-_ only
+   * 
+   * @param principalName the optional principal name
+   * @return a valid AWS session name
+   */
+  private String generateSessionName(Optional<String> principalName) {
+    if (principalName.isPresent() && !principalName.get().isEmpty()) {
+      // Sanitize principal name to comply with AWS session name requirements
+      String sanitizedPrincipal = sanitizePrincipalName(principalName.get());
+      long timestamp = System.currentTimeMillis();
+      String randomSuffix = UUID.randomUUID().toString().substring(0, 8);
+      String sessionName = sanitizedPrincipal + "_" + timestamp + "_" + randomSuffix;
+      
+      // Ensure we don't exceed AWS's 64 character limit
+      if (sessionName.length() > 64) {
+        // Truncate the principal name to fit within the limit
+        int maxPrincipalLength = 64 - String.valueOf(timestamp).length() - 10; // 10 for _timestamp_random
+        sanitizedPrincipal = sanitizedPrincipal.substring(0, Math.max(2, maxPrincipalLength));
+        sessionName = sanitizedPrincipal + "_" + timestamp + "_" + randomSuffix;
+      }
+      
+      return sessionName;
+    }
+    return "PolarisAwsCredentialsStorageIntegration";
+  }
+
+  /**
+   * Sanitize principal name to comply with AWS session name character requirements.
+   * Allowed characters: alphanumeric and +=,.@-_
+   * 
+   * @param principalName the principal name to sanitize
+   * @return sanitized principal name
+   */
+  private String sanitizePrincipalName(String principalName) {
+    // Replace any character that's not alphanumeric or +=,.@-_ with underscore
+    return principalName.replaceAll("[^a-zA-Z0-9+=,.@_-]", "_");
   }
 
   /**

@@ -126,9 +126,30 @@ public class ServiceProducers {
   public CallContext polarisCallContext(
       RealmContext realmContext,
       PolarisConfigurationStore configurationStore,
-      MetaStoreManagerFactory metaStoreManagerFactory) {
+      MetaStoreManagerFactory metaStoreManagerFactory,
+      @Context jakarta.ws.rs.core.SecurityContext securityContext) {
     BasePersistence metaStoreSession = metaStoreManagerFactory.getOrCreateSession(realmContext);
-    return new PolarisCallContext(realmContext, metaStoreSession, configurationStore);
+    
+    // Create a lazy supplier that retrieves the principal name when needed
+    // This ensures authentication has completed before we try to access the principal
+    java.util.function.Supplier<String> principalNameSupplier = () -> {
+      if (securityContext != null && securityContext.getUserPrincipal() != null) {
+        java.security.Principal principal = securityContext.getUserPrincipal();
+        if (principal instanceof org.apache.polaris.core.auth.PolarisPrincipal) {
+          String name = principal.getName();
+          LOGGER.debug("Retrieved principal name from SecurityContext: {}", name);
+          return name;
+        } else {
+          LOGGER.warn(
+              "SecurityContext has principal of unexpected type: {}. Principal name will be null. "
+                  + "This may cause billing errors if AWS credentials are vended.",
+              principal != null ? principal.getClass().getName() : "null");
+        }
+      }
+      return null;
+    };
+    
+    return new PolarisCallContext(realmContext, metaStoreSession, configurationStore, principalNameSupplier);
   }
 
   @Produces

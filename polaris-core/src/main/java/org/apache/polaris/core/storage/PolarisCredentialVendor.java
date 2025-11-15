@@ -54,4 +54,47 @@ public interface PolarisCredentialVendor {
       @Nonnull Set<String> allowedReadLocations,
       @Nonnull Set<String> allowedWriteLocations,
       Optional<String> refreshCredentialsEndpoint);
+
+  /**
+   * Get a sub-scoped credentials for an entity against the provided allowed read and write
+   * locations, with principal information for metering.
+   *
+   * @param callCtx the polaris call context
+   * @param catalogId the catalog id
+   * @param entityId the entity id
+   * @param entityType the entity type
+   * @param allowListOperation whether to allow LIST operation on the allowedReadLocations and
+   *     allowedWriteLocations
+   * @param allowedReadLocations a set of allowed to read locations
+   * @param allowedWriteLocations a set of allowed to write locations
+   * @param refreshCredentialsEndpoint an optional endpoint to use for refreshing credentials. If
+   *     supported by the storage type it will be returned to the client in the appropriate
+   *     properties. The endpoint may be relative to the base URI and the client is responsible for
+   *     handling the relative path
+   * @param principalName the name of the authenticated principal requesting credentials, used for
+   *     metering and audit purposes. May be empty for anonymous or system requests.
+   * @return an enum map containing the scoped credentials
+   */
+  @Nonnull
+  default ScopedCredentialsResult getSubscopedCredsForEntity(
+      @Nonnull PolarisCallContext callCtx,
+      long catalogId,
+      long entityId,
+      PolarisEntityType entityType,
+      boolean allowListOperation,
+      @Nonnull Set<String> allowedReadLocations,
+      @Nonnull Set<String> allowedWriteLocations,
+      Optional<String> refreshCredentialsEndpoint,
+      Optional<String> principalName) {
+    // Default implementation delegates to the original method for backward compatibility
+    return getSubscopedCredsForEntity(
+        callCtx,
+        catalogId,
+        entityId,
+        entityType,
+        allowListOperation,
+        allowedReadLocations,
+        allowedWriteLocations,
+        refreshCredentialsEndpoint);
+  }
 }
