@@ -2125,13 +2125,17 @@ public class TransactionalMetaStoreManagerImpl extends BaseMetaStoreManager {
             entityId);
 
     try {
+      // Extract principal name from call context for metering
+      Optional<String> principalName = Optional.ofNullable(callCtx.getPrincipalName());
+      
       AccessConfig accessConfig =
           storageIntegration.getSubscopedCreds(
               callCtx.getRealmConfig(),
               allowListOperation,
               allowedReadLocations,
               allowedWriteLocations,
-              refreshCredentialsEndpoint);
+              refreshCredentialsEndpoint,
+              principalName);
       return new ScopedCredentialsResult(accessConfig);
     } catch (Exception ex) {
       return new ScopedCredentialsResult(
