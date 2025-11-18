@@ -106,18 +106,18 @@ public class AwsCredentialsStorageIntegration
     AccessConfig.Builder accessConfig = AccessConfig.builder();
 
     if (shouldUseSts(storageConfig)) {
-      // CRITICAL: Validate principal name is present for billing/metering
-      // Every AWS credential vended must be attributable to a principal for accurate billing
+      // Validate principal name is present for billing/metering.
+      // Every AWS credential vended must be attributable to a principal.
       if (principalName == null || !principalName.isPresent() || principalName.get().isEmpty()) {
         throw new IllegalStateException(
-            "Principal name is required for AWS credential vending to ensure accurate billing. "
+            "Principal name is required for AWS credential vending. "
                 + "All requests must be authenticated with a valid principal. "
                 + "Anonymous or system requests cannot access AWS resources.");
       }
 
       // Generate session name with principal for metering
       String sessionName = generateSessionName(principalName);
-      LOGGER.info("Vending AWS credentials with session name: {}", sessionName);
+      LOGGER.debug("Vending AWS credentials with session name: {}", sessionName);
 
       AssumeRoleRequest.Builder request =
           AssumeRoleRequest.builder()

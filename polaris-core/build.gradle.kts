@@ -73,6 +73,9 @@ dependencies {
   implementation(libs.jakarta.ws.rs.api)
   implementation(libs.smallrye.common.annotation)
 
+  // HTTP client for metering API calls
+  implementation("org.apache.httpcomponents.client5:httpclient5:5.2.1")
+
   implementation("org.apache.iceberg:iceberg-aws")
   implementation(platform(libs.awssdk.bom))
   implementation("software.amazon.awssdk:sts")
