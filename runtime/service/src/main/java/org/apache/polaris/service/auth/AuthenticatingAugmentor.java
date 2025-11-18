@@ -26,8 +26,12 @@ import io.quarkus.security.runtime.QuarkusSecurityIdentity;
 import io.smallrye.mutiny.Uni;
 import jakarta.enterprise.context.ApplicationScoped;
 import jakarta.inject.Inject;
+
+import org.apache.iceberg.exceptions.ForbiddenException;
 import org.apache.iceberg.exceptions.ServiceFailureException;
 import org.apache.polaris.core.auth.PolarisPrincipal;
+import org.apache.polaris.core.metering.InsufficientBalanceException;
+import org.apache.polaris.core.metering.MeteringServiceException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -44,6 +48,10 @@ public class AuthenticatingAugmentor implements SecurityIdentityAugmentor {
   public static final int PRIORITY = 1000;
 
   private final Authenticator authenticator;
+
+  // Metering service for checking token balance before vending credentials
+  @Inject org.apache.polaris.core.metering.MeteringConfig meteringConfig;
+  @Inject org.apache.polaris.core.metering.MeteringService meteringService;
 
   @Inject
   public AuthenticatingAugmentor(Authenticator authenticator) {
@@ -87,6 +95,15 @@ public class AuthenticatingAugmentor implements SecurityIdentityAugmentor {
       PolarisPrincipal polarisPrincipal = authenticator.authenticate(polarisCredential);
       LOGGER.debug("Successfully authenticated principal: {} with roles: {}", 
           polarisPrincipal.getName(), polarisPrincipal.getRoles());
+
+      
+      // TODO: Fix this to throw an InsufficientBalanceException instead of 401 Unauthorized.
+      boolean hasSufficientBalance = meteringService.hasSufficientBalance(polarisPrincipal.getName());
+      if (!hasSufficientBalance) {
+        LOGGER.warn("Blocking request for principal '{}': insufficient balance", polarisPrincipal.getName());
+        throw new InsufficientBalanceException();
+      }
+        
       QuarkusSecurityIdentity.Builder builder =
           QuarkusSecurityIdentity.builder()
               .setAnonymous(false)
@@ -107,6 +124,11 @@ public class AuthenticatingAugmentor implements SecurityIdentityAugmentor {
       // This will result in 503 Service Unavailable instead of 401 Unauthorized
       LOGGER.error("Service failure during authentication", e);
       throw e;
+    } catch (InsufficientBalanceException e) {
+      throw new AuthenticationFailedException(e);
+    } catch (MeteringServiceException e) {
+      LOGGER.error("Metering service exception during authentication", e);
+      throw new ServiceFailureException("Metering service temporarily unavailable. Please try again later.");
     } catch (RuntimeException e) {
       LOGGER.error("Authentication failed for principal: {}", polarisCredential.getPrincipalName(), e);
       throw new AuthenticationFailedException(e);

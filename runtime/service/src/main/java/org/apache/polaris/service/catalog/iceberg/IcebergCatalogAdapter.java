@@ -33,7 +33,6 @@ import jakarta.inject.Inject;
 import jakarta.ws.rs.core.HttpHeaders;
 import jakarta.ws.rs.core.Response;
 import jakarta.ws.rs.core.SecurityContext;
-import java.security.Principal;
 import java.util.EnumSet;
 import java.util.Map;
 import java.util.Optional;
@@ -43,8 +42,6 @@ import org.apache.iceberg.MetadataUpdate;
 import org.apache.iceberg.catalog.Namespace;
 import org.apache.iceberg.catalog.TableIdentifier;
 import org.apache.iceberg.exceptions.BadRequestException;
-import org.apache.iceberg.exceptions.ForbiddenException;
-import org.apache.iceberg.exceptions.ServiceUnavailableException;
 import org.apache.iceberg.exceptions.NotAuthorizedException;
 import org.apache.iceberg.exceptions.NotFoundException;
 import org.apache.iceberg.rest.Endpoint;
@@ -71,7 +68,6 @@ import org.apache.polaris.core.config.RealmConfig;
 import org.apache.polaris.core.context.CallContext;
 import org.apache.polaris.core.context.RealmContext;
 import org.apache.polaris.core.entity.PolarisEntity;
-import org.apache.polaris.core.metering.MeteringServiceException;
 import org.apache.polaris.core.persistence.PolarisMetaStoreManager;
 import org.apache.polaris.core.persistence.ResolvedPolarisEntity;
 import org.apache.polaris.core.persistence.resolver.ResolutionManifestFactory;
@@ -158,10 +154,6 @@ public class IcebergCatalogAdapter
   private final CatalogHandlerUtils catalogHandlerUtils;
   private final Instance<ExternalCatalogFactory> externalCatalogFactories;
   private final PolarisEventListener polarisEventListener;
-  
-  // Metering service for checking token balance before vending credentials
-  @Inject org.apache.polaris.core.metering.MeteringConfig meteringConfig;
-  @Inject org.apache.polaris.core.metering.MeteringService meteringService;
 
   @Inject
   public IcebergCatalogAdapter(
@@ -434,33 +426,6 @@ public class IcebergCatalogAdapter
       throw new BadRequestException("If-None-Match may not take the value of '*'");
     }
 
-    // Metering check: Verify user has sufficient token balance before loading table
-    Principal principal = securityContext.getUserPrincipal();
-    if (principal != null && meteringConfig.enabled()) {
-      String principalEmail = principal.getName();
-      LOGGER.debug("Checking metering balance for principal: {}", principalEmail);
-      
-      try {
-        boolean hasSufficientBalance = meteringService.hasSufficientBalance(principalEmail);
-        
-        if (!hasSufficientBalance) {
-          LOGGER.warn("Blocking table access for principal '{}': insufficient token balance", 
-                     principalEmail);
-          throw new ForbiddenException(
-              "Insufficient tokens. Please purchase more tokens to access data.");
-        }
-        
-        LOGGER.debug("Metering check passed for principal: {}", principalEmail);
-        
-      } catch (MeteringServiceException e) {
-        LOGGER.error("Metering service unavailable for principal '{}': {}", 
-                    principalEmail, e.getMessage());
-        // Fail-secure: block access if metering service is unavailable
-        throw new ServiceUnavailableException(
-            "Metering service temporarily unavailable. Please try again later.");
-      }
-    }
-
     return withCatalog(
         securityContext,
         prefix,
@@ -643,47 +608,6 @@ public class IcebergCatalogAdapter
       String table,
       RealmContext realmContext,
       SecurityContext securityContext) {
-    
-    // Step 1: Get principal from security context
-    Principal principal = securityContext.getUserPrincipal();
-    if (principal == null) {
-      LOGGER.warn("Attempted to load credentials without authentication");
-      return Response.status(Response.Status.UNAUTHORIZED)
-          .entity("Authentication required to access table credentials")
-          .build();
-    }
-    
-    String principalEmail = principal.getName();
-    LOGGER.debug("Loading credentials for table {}.{} requested by principal: {}", 
-                 namespace, table, principalEmail);
-    
-    // Step 2: Check token balance before vending S3 credentials
-    if (meteringConfig.enabled()) {
-      try {
-        boolean hasSufficientBalance = meteringService.hasSufficientBalance(principalEmail);
-        
-        if (!hasSufficientBalance) {
-          LOGGER.warn("Blocking credential vending for principal '{}': insufficient token balance", 
-                     principalEmail);
-          return Response.status(402)
-              .entity("Insufficient tokens. Please purchase more tokens to access data.")
-              .build();
-        }
-        
-        LOGGER.info("Metering check passed for principal '{}': sufficient balance", principalEmail);
-        
-      } catch (MeteringServiceException e) {
-        LOGGER.error("Metering service error for principal '{}': {}", principalEmail, e.getMessage());
-        // Fail-secure: block access if metering service is unavailable
-        return Response.status(Response.Status.SERVICE_UNAVAILABLE)
-            .entity("Metering service temporarily unavailable. Please try again later. Error: " + e.getMessage())
-            .build();
-      }
-    } else {
-      LOGGER.debug("Metering disabled, skipping balance check for principal '{}'", principalEmail);
-    }
-    
-    // Step 3: Vend S3 credentials (balance is sufficient or metering is disabled)
     Namespace ns = decodeNamespace(namespace);
     TableIdentifier tableIdentifier = TableIdentifier.of(ns, RESTUtil.decodeString(table));
     return withCatalog(
@@ -695,10 +619,6 @@ public class IcebergCatalogAdapter
                   tableIdentifier,
                   "all",
                   Optional.of(new PolarisResourcePaths(prefix).credentialsPath(tableIdentifier)));
-          
-          LOGGER.debug("Successfully vended credentials for table {}.{} to principal '{}'", 
-                     namespace, table, principalEmail);
-          
           return Response.ok(
                   ImmutableLoadCredentialsResponse.builder()
                       .credentials(loadTableResponse.credentials())

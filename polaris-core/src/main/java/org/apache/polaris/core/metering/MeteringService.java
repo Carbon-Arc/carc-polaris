@@ -63,6 +63,13 @@ public class MeteringService {
       return true;
     }
     
+    // Skip metering for system/admin principals
+    // TODO: Find a way to skip metering checks for metadata endpoints.
+    if ("root".equals(principalEmail)) {
+      LOGGER.debug("Skipping metering for system principal '{}'", principalEmail);
+      return true;
+    }
+
     int attempts = 0;
     Exception lastException = null;
     
