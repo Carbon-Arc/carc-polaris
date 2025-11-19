@@ -56,6 +56,19 @@ dependencies {
     exclude("io.dropwizard.metrics", "metrics-core")
   }
 
+  // Add hadoop-aws for S3A filesystem support when federating to Hive with S3 tables
+  implementation("org.apache.hadoop:hadoop-aws:3.4.2") {
+    exclude("org.slf4j", "slf4j-reload4j")
+    exclude("org.slf4j", "slf4j-log4j12")
+    exclude("ch.qos.reload4j", "reload4j")
+    exclude("log4j", "log4j")
+    exclude("org.apache.zookeeper", "zookeeper")
+    exclude("com.google.guava", "guava")
+    // Exclude the massive AWS SDK bundle - polaris-core already has specific AWS SDK v2
+    // dependencies
+    exclude("software.amazon.awssdk", "bundle")
+  }
+
   // CDI dependencies for runtime discovery
   implementation(libs.jakarta.enterprise.cdi.api)
   implementation(libs.smallrye.common.annotation)
