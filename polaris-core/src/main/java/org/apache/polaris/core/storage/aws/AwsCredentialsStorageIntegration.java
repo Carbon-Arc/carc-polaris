@@ -165,11 +165,30 @@ public class AwsCredentialsStorageIntegration
           accessConfig.put(StorageAccessProperty.AWS_REFRESH_CREDENTIALS_ENDPOINT, endpoint);
         });
 
+    // Conditional endpoint routing for metering:
+    // Read-only operations → use S3Proxy endpoint for metering
+    // Write operations → use direct S3 endpoint (internalEndpoint)
+    boolean isReadOnlyOperation = allowedWriteLocations.isEmpty();
+    
     URI endpointUri = storageConfig.getEndpointUri();
-    if (endpointUri != null) {
-      accessConfig.put(StorageAccessProperty.AWS_ENDPOINT, endpointUri.toString());
-    }
     URI internalEndpointUri = storageConfig.getInternalEndpointUri();
+    
+    if (isReadOnlyOperation) {
+      if (endpointUri != null) {
+        accessConfig.put(StorageAccessProperty.AWS_ENDPOINT, endpointUri.toString());
+        LOGGER.info("Vending READ-ONLY credentials with S3Proxy endpoint: {}", endpointUri);
+      }
+    } else {
+      if (internalEndpointUri != null) {
+        accessConfig.put(StorageAccessProperty.AWS_ENDPOINT, internalEndpointUri.toString());
+        LOGGER.info("Vending WRITE credentials with direct S3 endpoint: {}", internalEndpointUri);
+      } else if (endpointUri != null) {
+        // Fallback to regular endpoint if internalEndpoint not set
+        accessConfig.put(StorageAccessProperty.AWS_ENDPOINT, endpointUri.toString());
+        LOGGER.info("Vending WRITE credentials with endpoint: {}", endpointUri);
+      }
+    }
+    
     if (internalEndpointUri != null) {
       accessConfig.putInternalProperty(
           StorageAccessProperty.AWS_ENDPOINT.getPropertyName(), internalEndpointUri.toString());
