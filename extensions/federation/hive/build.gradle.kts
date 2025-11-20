@@ -69,6 +69,11 @@ dependencies {
     exclude("software.amazon.awssdk", "bundle")
   }
 
+  // Add AWS SDK S3 Transfer Manager for S3 operations
+  // Required by hadoop-aws when accessing S3 tables
+  implementation(platform(libs.awssdk.bom))
+  implementation("software.amazon.awssdk:s3-transfer-manager")
+
   // CDI dependencies for runtime discovery
   implementation(libs.jakarta.enterprise.cdi.api)
   implementation(libs.smallrye.common.annotation)

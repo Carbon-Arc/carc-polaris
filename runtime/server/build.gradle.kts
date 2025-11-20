@@ -83,6 +83,9 @@ tasks.named<QuarkusRun>("quarkusRun") {
       "-Dpolaris.features.\"SUPPORTED_CATALOG_STORAGE_TYPES\"=[\"FILE\",\"S3\",\"GCS\",\"AZURE\"]",
       "-Dpolaris.readiness.ignore-severe-issues=true",
       "-Dpolaris.features.\"DROP_WITH_PURGE_ENABLED\"=true",
+      "-Dpolaris.features.\"ENABLE_CATALOG_FEDERATION\"=true",
+      "-Dpolaris.features.\"SUPPORTED_CATALOG_CONNECTION_TYPES\"=[\"ICEBERG_REST\",\"HIVE\"]",
+      "-Dpolaris.features.\"SUPPORTED_EXTERNAL_CATALOG_AUTHENTICATION_TYPES\"=[\"OAUTH\",\"IMPLICIT\"]",
     )
 }
 
