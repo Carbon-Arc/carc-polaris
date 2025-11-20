@@ -20,6 +20,7 @@ package org.apache.polaris.extensions.federation.hive;
 
 import io.smallrye.common.annotation.Identifier;
 import jakarta.enterprise.context.ApplicationScoped;
+import org.apache.hadoop.conf.Configuration;
 import org.apache.iceberg.catalog.Catalog;
 import org.apache.iceberg.hive.HiveCatalog;
 import org.apache.polaris.core.catalog.ExternalCatalogFactory;
@@ -52,22 +53,22 @@ public class HiveFederatedCatalogFactory implements ExternalCatalogFactory {
       throw new IllegalStateException("Hive federation only supports IMPLICIT authentication.");
     }
     String warehouse = ((HiveConnectionConfigInfoDpo) connectionConfigInfoDpo).getWarehouse();
-    // Unlike Hadoop, HiveCatalog does not require us to create a Configuration object, the iceberg
-    // rest library find the default configuration by reading hive-site.xml in the classpath
-    // (including HADOOP_CONF_DIR classpath).
-
-    // TODO: In the future, we could support multiple HiveCatalog instances based on polaris/catalog
-    // properties.
-    // A brief set of setps involved (and the options):
-    // 1. Create a configuration without default properties.
-    //  `Configuration conf = new Configuration(boolean loadDefaults=false);`
-    // 2a. Specify the hive-site.xml file path in the configuration.
-    //  `conf.addResource(new Path(hiveSiteXmlPath));`
-    // 2b. Specify individual properties in the configuration.
-    //  `conf.set(property, value);`
-    // Polaris could support federating to multiple LDAP based Hive metastores. Multiple
-    // Kerberos instances are not suitable because Kerberos ties a single identity to the server.
+    
+    // Create Hadoop Configuration and set S3A credentials provider for IRSA support
+    Configuration conf = new Configuration();
+    
+    // Configure S3A to use AWS SDK v2 DefaultCredentialsProvider which supports WebIdentityToken (IRSA)
+    conf.set("fs.s3a.aws.credentials.provider", "software.amazon.awssdk.auth.credentials.DefaultCredentialsProvider");
+    
+    // Additional S3A settings
+    conf.set("fs.s3a.path.style.access", "false");
+    conf.set("fs.s3a.connection.maximum", "100");
+    conf.set("fs.s3a.threads.max", "50");
+    
+    LOGGER.info("Configured Hadoop S3A with DefaultCredentialsProvider for IRSA support");
+    
     HiveCatalog hiveCatalog = new HiveCatalog();
+    hiveCatalog.setConf(conf);
     hiveCatalog.initialize(
         warehouse, connectionConfigInfoDpo.asIcebergCatalogProperties(userSecretsManager));
     return hiveCatalog;
